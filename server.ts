@@ -5,6 +5,11 @@ import { google } from "googleapis";
 import jwt from "jsonwebtoken";
 import axios from "axios";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 declare global {
   namespace Express {
@@ -291,7 +296,8 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Force correct MIME types for production static files
-    app.use(express.static("dist", {
+    const distPath = path.join(__dirname, "dist");
+    app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".js") || filePath.endsWith(".mjs")) {
           res.setHeader("Content-Type", "application/javascript");
@@ -302,9 +308,8 @@ async function startServer() {
     }));
     
     // SPA Fallback for React Router
-    const path = await import("path");
     app.get("*", (req, res) => {
-      res.sendFile(path.resolve(process.cwd(), "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
