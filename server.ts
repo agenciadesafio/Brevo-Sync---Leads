@@ -297,15 +297,9 @@ async function startServer() {
   } else {
     // Force correct MIME types for production static files
     const distPath = path.join(__dirname, "dist");
-    app.use(express.static(distPath, {
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith(".js") || filePath.endsWith(".mjs")) {
-          res.setHeader("Content-Type", "application/javascript");
-        } else if (filePath.endsWith(".css")) {
-          res.setHeader("Content-Type", "text/css");
-        }
-      }
-    }));
+    
+    // Serve static files with correct MIME types automatically
+    app.use(express.static(distPath));
     
     // SPA Fallback for React Router
     app.get("*", (req, res) => {
