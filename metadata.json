@@ -1,0 +1,5 @@
+{
+  "name": "Brevo Contact Sync",
+  "description": "Sync contacts from Google Sheets to Brevo",
+  "requestFramePermissions": []
+}
