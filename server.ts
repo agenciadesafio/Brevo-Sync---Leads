@@ -17,17 +17,18 @@ declare global {
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 app.use(express.json());
 app.use(cookieParser());
 
 const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key-for-dev-only";
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.APP_URL}/auth/callback`
+  `${APP_URL}/auth/callback`
 );
 
 // Middleware to verify JWT and set Google credentials
@@ -289,7 +290,22 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static("dist"));
+    // Force correct MIME types for production static files
+    app.use(express.static("dist", {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".js") || filePath.endsWith(".mjs")) {
+          res.setHeader("Content-Type", "application/javascript");
+        } else if (filePath.endsWith(".css")) {
+          res.setHeader("Content-Type", "text/css");
+        }
+      }
+    }));
+    
+    // SPA Fallback for React Router
+    const path = await import("path");
+    app.get("*", (req, res) => {
+      res.sendFile(path.resolve(process.cwd(), "dist", "index.html"));
+    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
