@@ -151,6 +151,27 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ success: true });
 });
 
+app.get("/api/brevo/lists", requireAuth, async (req, res) => {
+  if (!process.env.BREVO_API_KEY) {
+    return res.status(500).json({ error: "BREVO_API_KEY is not configured on the server" });
+  }
+
+  try {
+    const response = await axios.get("https://api.brevo.com/v3/contacts/lists", {
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "accept": "application/json"
+      }
+    });
+    
+    // Brevo returns lists inside a `lists` array
+    res.json({ success: true, lists: response.data.lists });
+  } catch (error: any) {
+    console.error("Fetch lists error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.message || "Failed to fetch lists" });
+  }
+});
+
 app.post("/api/contacts/sync", requireAuth, async (req, res) => {
   const { spreadsheetId, range, listId } = req.body;
   const user = (req as any).user;

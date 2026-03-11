@@ -25,6 +25,10 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Brevo Lists State
+  const [brevoLists, setBrevoLists] = useState<any[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
+
   useEffect(() => {
     checkAuthStatus();
 
@@ -36,6 +40,30 @@ export default function App() {
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchBrevoLists();
+    }
+  }, [isAuthenticated]);
+
+  const fetchBrevoLists = async () => {
+    setLoadingLists(true);
+    try {
+      const res = await fetch("/api/brevo/lists");
+      const data = await res.json();
+      if (data.success && data.lists) {
+        setBrevoLists(data.lists);
+        if (data.lists.length > 0 && !listId) {
+          setListId(data.lists[0].id.toString());
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch Brevo lists", error);
+    } finally {
+      setLoadingLists(false);
+    }
+  };
 
   const checkAuthStatus = async () => {
     try {
@@ -211,15 +239,29 @@ export default function App() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="listId">ID da Lista no Brevo</Label>
-                  <Input 
-                    id="listId" 
-                    type="number"
-                    placeholder="Ex: 2" 
-                    value={listId}
-                    onChange={(e) => setListId(e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="listId">Lista no Brevo</Label>
+                  <div className="relative">
+                    <select
+                      id="listId"
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                      value={listId}
+                      onChange={(e) => setListId(e.target.value)}
+                      required
+                      disabled={loadingLists || brevoLists.length === 0}
+                    >
+                      <option value="" disabled>
+                        {loadingLists ? "Carregando listas..." : "Selecione uma lista"}
+                      </option>
+                      {brevoLists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.name} (ID: {list.id})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-50"><path d="M4.93179 5.43179C4.75605 5.60753 4.75605 5.89245 4.93179 6.06819C5.10753 6.24392 5.39245 6.24392 5.56819 6.06819L7.49999 4.13638L9.43179 6.06819C9.60753 6.24392 9.89245 6.24392 10.0682 6.06819C10.2439 5.89245 10.2439 5.60753 10.0682 5.43179L7.81819 3.18179C7.73379 3.0974 7.61933 3.04999 7.49999 3.04999C7.38064 3.04999 7.26618 3.0974 7.18179 3.18179L4.93179 5.43179ZM10.0682 9.56819C10.2439 9.39245 10.2439 9.10753 10.0682 8.93179C9.89245 8.75605 9.60753 8.75605 9.43179 8.93179L7.49999 10.8636L5.56819 8.93179C5.39245 8.75605 5.10753 8.75605 4.93179 8.93179C4.75605 9.10753 4.75605 9.39245 4.93179 9.56819L7.18179 11.8182C7.26618 11.9026 7.38064 11.95 7.49999 11.95C7.61933 11.95 7.73379 11.9026 7.81819 11.8182L10.0682 9.56819Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                    </div>
+                  </div>
                 </div>
 
                 {syncResult && (
@@ -280,15 +322,29 @@ export default function App() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manualListId">ID da Lista no Brevo</Label>
-                  <Input 
-                    id="manualListId" 
-                    type="number"
-                    placeholder="Ex: 2" 
-                    value={listId}
-                    onChange={(e) => setListId(e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="manualListId">Lista no Brevo</Label>
+                  <div className="relative">
+                    <select
+                      id="manualListId"
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                      value={listId}
+                      onChange={(e) => setListId(e.target.value)}
+                      required
+                      disabled={loadingLists || brevoLists.length === 0}
+                    >
+                      <option value="" disabled>
+                        {loadingLists ? "Carregando listas..." : "Selecione uma lista"}
+                      </option>
+                      {brevoLists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.name} (ID: {list.id})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-50"><path d="M4.93179 5.43179C4.75605 5.60753 4.75605 5.89245 4.93179 6.06819C5.10753 6.24392 5.39245 6.24392 5.56819 6.06819L7.49999 4.13638L9.43179 6.06819C9.60753 6.24392 9.89245 6.24392 10.0682 6.06819C10.2439 5.89245 10.2439 5.60753 10.0682 5.43179L7.81819 3.18179C7.73379 3.0974 7.61933 3.04999 7.49999 3.04999C7.38064 3.04999 7.26618 3.0974 7.18179 3.18179L4.93179 5.43179ZM10.0682 9.56819C10.2439 9.39245 10.2439 9.10753 10.0682 8.93179C9.89245 8.75605 9.60753 8.75605 9.43179 8.93179L7.49999 10.8636L5.56819 8.93179C5.39245 8.75605 5.10753 8.75605 4.93179 8.93179C4.75605 9.10753 4.75605 9.39245 4.93179 9.56819L7.18179 11.8182C7.26618 11.9026 7.38064 11.95 7.49999 11.95C7.61933 11.95 7.73379 11.9026 7.81819 11.8182L10.0682 9.56819Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                    </div>
+                  </div>
                 </div>
 
                 {addResult && (
