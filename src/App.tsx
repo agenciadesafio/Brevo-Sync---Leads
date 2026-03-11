@@ -13,7 +13,7 @@ export default function App() {
 
   // Sync Form State
   const [spreadsheetId, setSpreadsheetId] = useState("");
-  const [range, setRange] = useState("Página1!A:C");
+  const [range, setRange] = useState("Página1");
   const [listId, setListId] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; synced?: number } | null>(null);
@@ -75,11 +75,24 @@ export default function App() {
     setSyncing(true);
     setSyncResult(null);
 
+    // Extrai o ID se o usuário colar o link completo da planilha
+    let finalSpreadsheetId = spreadsheetId;
+    const match = spreadsheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      finalSpreadsheetId = match[1];
+    }
+
+    // Se o usuário digitou apenas o nome da aba, adiciona o intervalo padrão
+    let finalRange = range;
+    if (!range.includes('!')) {
+      finalRange = `${range}!A:Z`;
+    }
+
     try {
       const res = await fetch("/api/contacts/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, range, listId }),
+        body: JSON.stringify({ spreadsheetId: finalSpreadsheetId, range: finalRange, listId }),
       });
       const data = await res.json();
       
@@ -174,22 +187,22 @@ export default function App() {
             <CardContent>
               <form onSubmit={handleSync} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="spreadsheetId">ID da Planilha</Label>
+                  <Label htmlFor="spreadsheetId">Link ou ID da Planilha</Label>
                   <Input 
                     id="spreadsheetId" 
-                    placeholder="Ex: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms" 
+                    placeholder="Cole o link completo da planilha do Google" 
                     value={spreadsheetId}
                     onChange={(e) => setSpreadsheetId(e.target.value)}
                     required
                   />
-                  <p className="text-xs text-slate-500">Encontrado na URL da planilha.</p>
+                  <p className="text-xs text-slate-500">Você pode colar a URL inteira da planilha.</p>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="range">Intervalo (Range)</Label>
+                  <Label htmlFor="range">Nome da Aba (Página)</Label>
                   <Input 
                     id="range" 
-                    placeholder="Ex: Página1!A:C" 
+                    placeholder="Ex: Página1" 
                     value={range}
                     onChange={(e) => setRange(e.target.value)}
                     required
