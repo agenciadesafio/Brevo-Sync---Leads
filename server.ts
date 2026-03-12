@@ -56,7 +56,7 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
 
 app.get("/api/auth/url", (req, res) => {
   const scopes = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
   ];
@@ -172,8 +172,18 @@ app.get("/api/brevo/lists", requireAuth, async (req, res) => {
   }
 });
 
+// Helper function to convert column index to letter (0 -> A, 1 -> B, 26 -> AA)
+function getColumnLetter(colIndex: number) {
+  let letter = '';
+  while (colIndex >= 0) {
+    letter = String.fromCharCode((colIndex % 26) + 65) + letter;
+    colIndex = Math.floor(colIndex / 26) - 1;
+  }
+  return letter;
+}
+
 app.post("/api/contacts/sync", requireAuth, async (req, res) => {
-  const { spreadsheetId, range, listId } = req.body;
+  const { spreadsheetId, range, listId, listName, notificationEmails } = req.body;
   const user = (req as any).user;
 
   if (!spreadsheetId || !range || !listId) {
@@ -212,22 +222,27 @@ app.post("/api/contacts/sync", requireAuth, async (req, res) => {
     if (emailIndex === -1) {
       return res.status(400).json({ error: "Sheet must contain an 'email' column." });
     }
+    
+    if (statusIndex === -1) {
+      return res.status(400).json({ error: "Sheet must contain a 'status' column para ler os leads novos." });
+    }
 
     let syncedCount = 0;
     let errors = [];
+    const rowsToUpdate: number[] = [];
+    const sheetName = range.includes('!') ? range.split('!')[0] : range;
+    const statusColLetter = getColumnLetter(statusIndex);
 
     // 2. Sync to Brevo
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const email = row[emailIndex];
       const name = nameIndex !== -1 ? row[nameIndex] : "";
-      const status = statusIndex !== -1 ? row[statusIndex] : "Ativo";
+      const status = row[statusIndex] || "";
 
-      if (!email) continue;
+      // Ler somente se o status estiver como "novo"
+      if (!email || status.toLowerCase() !== "novo") continue;
 
-      // Only sync if status is not "Inativo" or something similar, or sync all and update attributes.
-      // Let's just create/update the contact in Brevo.
-      
       try {
         await axios.post(
           "https://api.brevo.com/v3/contacts",
@@ -235,7 +250,7 @@ app.post("/api/contacts/sync", requireAuth, async (req, res) => {
             email: email,
             attributes: {
               NOME: name,
-              STATUS: status
+              STATUS: "Inserido"
             },
             listIds: [parseInt(listId)],
             updateEnabled: true
@@ -249,9 +264,68 @@ app.post("/api/contacts/sync", requireAuth, async (req, res) => {
           }
         );
         syncedCount++;
+        rowsToUpdate.push(i); // Guarda o índice da linha para atualizar depois
       } catch (err: any) {
         console.error(`Failed to sync ${email}:`, err.response?.data || err.message);
         errors.push({ email, error: err.response?.data?.message || err.message });
+      }
+    }
+
+    // 3. Update Google Sheets Status
+    if (rowsToUpdate.length > 0) {
+      const dataToUpdate = rowsToUpdate.map(rowIndex => ({
+        range: `${sheetName}!${statusColLetter}${rowIndex + 1}`,
+        values: [['Inserido']]
+      }));
+
+      try {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            valueInputOption: 'USER_ENTERED',
+            data: dataToUpdate
+          }
+        });
+      } catch (sheetErr) {
+        console.error("Failed to update Google Sheets status:", sheetErr);
+      }
+    }
+
+    // 4. Send Notification Email
+    if (notificationEmails && syncedCount > 0) {
+      const emailList = notificationEmails.split(',').map((e: string) => ({ email: e.trim() })).filter((e: any) => e.email);
+      if (emailList.length > 0) {
+        try {
+          await axios.post(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+              sender: { name: "Sistema de Leads", email: "noreply@desafioweb.com.br" },
+              to: emailList,
+              subject: "Sincronização de Leads Concluída",
+              htmlContent: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                  <h2 style="color: #0f172a;">Sincronização Concluída com Sucesso!</h2>
+                  <p>A sincronização de leads da sua planilha para o Brevo foi finalizada.</p>
+                  <ul style="background: #f8fafc; padding: 20px; border-radius: 8px; list-style: none;">
+                    <li style="margin-bottom: 10px;"><strong>Planilha Utilizada:</strong> <a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}" style="color: #2563eb;">Acessar Planilha</a></li>
+                    <li style="margin-bottom: 10px;"><strong>Lista no Brevo:</strong> ${listName || listId}</li>
+                    <li><strong>Leads Atualizados:</strong> ${syncedCount}</li>
+                  </ul>
+                  <p>Os leads com status "novo" foram processados e atualizados para "Inserido" na planilha.</p>
+                </div>
+              `
+            },
+            {
+              headers: {
+                "api-key": process.env.BREVO_API_KEY,
+                "Content-Type": "application/json",
+                "accept": "application/json"
+              }
+            }
+          );
+        } catch (emailErr: any) {
+          console.error("Failed to send notification email:", emailErr.response?.data || emailErr.message);
+        }
       }
     }
 
